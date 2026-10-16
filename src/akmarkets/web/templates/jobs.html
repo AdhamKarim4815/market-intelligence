@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="lede">
+  <h1>Jobs</h1>
+  <p class="muted">
+    What ran, what it did, and — the question that actually matters — when
+    each job last <em>succeeded</em>.
+  </p>
+</section>
+
+<section>
+  <h2>Last success</h2>
+  {% if history.last_success %}
+  <div class="cards">
+    {% for name, run in history.last_success.items() %}
+    <article class="card">
+      <h3>{{ name }}</h3>
+      <p class="value">{{ run.finished_at|ago }}</p>
+      <p class="muted">{{ run.message or '' }}</p>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No job has succeeded yet.</p>
+  {% endif %}
+  {% for name in history.jobs if name not in history.last_success %}
+  <div class="banner error" role="alert">
+    <strong>{{ name }} has never completed successfully.</strong>
+    It has run, so this is a failure rather than an absence.
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Recent runs</h2>
+  {% if history.runs %}
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>Job</th><th>Status</th><th>Source</th>
+          <th>Started</th><th class="num">Took</th><th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in history.runs %}
+        <tr>
+          <td>{{ run.job }}</td>
+          <td>
+            <span class="state state-{{ 'healthy' if run.status == 'done' else 'failed' if run.status == 'failed' else 'degraded' if run.status == 'abandoned' else 'unknown' }}">{{ run.status }}</span>
+          </td>
+          <td class="muted">{{ run.source }}</td>
+          <td class="muted">{{ run.started_at|ago }}</td>
+          <td class="num muted">
+            {% if run.finished_at %}{{ ((run.finished_at - run.started_at).total_seconds())|round(1) }}s{% else %}{{ MISSING }}{% endif %}
+          </td>
+          <td class="muted">{{ run.error or run.message or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">
+    An <code>abandoned</code> run is one whose lock was taken over after it
+    stopped reporting — a crash, not a slow job. It is shown as its own
+    state rather than left reading "running" forever.
+  </p>
+  {% else %}
+  <p class="muted">Nothing has run yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>AI spend</h2>
+  <div class="cards">
+    <article class="card">
+      <h3>Today</h3>
+      <p class="value">{{ spent_today|money }}</p>
+      <p class="muted">ceiling ${{ ceiling }} / day, counted in UTC</p>
+    </article>
+  </div>
+  {% if by_feature %}
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead><tr><th>Feature</th><th class="num">30 days</th><th class="num">Calls</th></tr></thead>
+      <tbody>
+        {% for feature, cost, calls in by_feature %}
+        <tr>
+          <td>{{ feature }}</td>
+          <td class="num">{{ cost|money }}</td>
+          <td class="num">{{ calls }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">No AI calls have been made.</p>
+  {% endif %}
+</section>
+{% endblock %}

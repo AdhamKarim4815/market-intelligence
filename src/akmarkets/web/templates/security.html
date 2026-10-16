@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block content %}
+{% set t = view.technical %}
+{% set v = view.valuation %}
+
+<section class="lede">
+  <h1>{{ view.instrument.symbol }}</h1>
+  <p class="muted">
+    {{ view.instrument.name or 'name unknown' }}
+    {% if view.instrument.sector %}· {{ view.instrument.sector }}{% endif %}
+    {% if t %}· as of {{ t.as_of }}{% endif %}
+  </p>
+</section>
+
+{% if t %}
+<section class="cards">
+  <article class="card">
+    <h2>Last close</h2>
+    <p class="value">{{ t.close | money }}</p>
+    <p class="muted">{{ view.bars }} session(s) of history</p>
+  </article>
+  <article class="card">
+    <h2>Trend</h2>
+    <p class="value">{{ t.trend }}</p>
+    <p class="muted">
+      {% if t.ma50 and t.ma200 %}50d {{ t.ma50 | money }} · 200d {{ t.ma200 | money }}
+      {% else %}not enough history for the full stack{% endif %}
+    </p>
+  </article>
+  <article class="card">
+    <h2>Position</h2>
+    {% if view.position and view.position.is_open %}
+    <p class="value">{{ view.position.market_value | money }}</p>
+    <p class="muted">
+      {{ view.position.quantity | quantity }} @ {{ view.position.average_cost | money }}
+      {% if view.portfolio_weight %}· {{ view.portfolio_weight | percent(1) }} of portfolio{% endif %}
+    </p>
+    {% else %}
+    <p class="value">{{ MISSING }}</p>
+    <p class="muted">not held{{ ' in this portfolio' if portfolio_id }}</p>
+    {% endif %}
+  </article>
+</section>
+
+<h2>Technical</h2>
+<div class="grid-wrap">
+<table class="grid">
+  <tbody>
+    <tr><td>RSI (14)</td><td class="num">{{ t.rsi14 | round(1) if t.rsi14 is not none else MISSING }}</td><td class="detail">{{ t.rsi_state }}</td></tr>
+    <tr><td>MACD</td>
+        <td class="num">{{ t.macd.histogram | round(3) if t.macd else MISSING }}</td>
+        <td class="detail">{% if t.macd %}line {{ t.macd.line | round(3) }} vs signal {{ t.macd.signal | round(3) }}{% else %}needs ~35 sessions{% endif %}</td></tr>
+    <tr><td>ATR (14)</td><td class="num">{{ t.atr14 | money if t.atr14 is not none else MISSING }}</td><td class="detail">average true range, not a forecast</td></tr>
+    <tr><td>Relative volume</td>
+        <td class="num">{{ t.relative_volume | round(2) if t.relative_volume is not none else MISSING }}×</td>
+        <td class="detail">{{ 'abnormal' if t.volume_is_abnormal else 'normal' }}</td></tr>
+    <tr><td>Gap</td><td class="num">{{ t.gap | percent if t.gap is not none else MISSING }}</td><td class="detail">open against previous close</td></tr>
+    <tr><td>Drawdown</td><td class="num">{{ t.drawdown | percent if t.drawdown is not none else MISSING }}</td><td class="detail">below the running peak</td></tr>
+    {% for name, period in [('20d', t.ma20), ('50d', t.ma50), ('100d', t.ma100), ('200d', t.ma200)] %}
+    <tr><td>MA {{ name }}</td><td class="num">{{ period | money if period is not none else MISSING }}</td>
+        <td class="detail">{% if period is none %}not enough history{% elif t.close > period %}price above{% else %}price below{% endif %}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if t.supports or t.resistances %}
+<h2>Levels</h2>
+<p class="muted small">
+  Clustered pivot highs and lows. The touch count is the evidence — a level
+  a price approached once is a coincidence. These are not predictions.
+</p>
+<div class="grid-wrap">
+<table class="grid">
+  <thead><tr><th>Kind</th><th class="num">Price</th><th class="num">Touches</th><th></th></tr></thead>
+  <tbody>
+    {% for level in t.resistances %}
+    <tr><td>resistance</td><td class="num">{{ level.price | money }}</td><td class="num">{{ level.touches }}</td>
+        <td class="detail">{{ 'meaningful' if level.is_meaningful else 'weak — too few touches' }}</td></tr>
+    {% endfor %}
+    {% for level in t.supports %}
+    <tr><td>support</td><td class="num">{{ level.price | money }}</td><td class="num">{{ level.touches }}</td>
+        <td class="detail">{{ 'meaningful' if level.is_meaningful else 'weak — too few touches' }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% else %}
+<p class="muted">No price history cached. Run <code>ak-markets prices {{ view.instrument.symbol }}</code>.</p>
+{% endif %}
+
+<h2>Fundamentals</h2>
+{% if view.has_fundamentals %}
+<p class="muted small">
+  As filed with the SEC. Valued as a <strong>{{ view.archetype.value.replace('_', ' ') }}</strong>
+  company — ratios that do not apply to that kind of business are not
+  computed, because a P/E derived from a loss looks meaningful and is not.
+</p>
+<div class="grid-wrap">
+<table class="grid">
+  <thead><tr><th>Ratio</th><th class="num">Value</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for name, label in [('pe','P/E'), ('ps','P/S'), ('pb','P/B'), ('ev_ebitda','EV/EBIT'), ('fcf_yield','FCF yield'), ('net_debt_to_equity','Net debt / equity')] %}
+    <tr>
+      <td>{{ label }}</td>
+      <td class="num">
+        {% set value = v[name] if v else none %}
+        {% if value is not none %}{{ value | round(2) }}{% else %}{{ MISSING }}{% endif %}
+      </td>
+      <td class="detail">
+        {% if v and name in v.not_applicable %}does not apply to this kind of company
+        {% elif v and name in v.unavailable %}not reported
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% set p = view.periods | selectattr('is_annual') | list | last %}
+{% if p %}
+<div class="grid-wrap">
+<table class="grid">
+  <thead><tr><th>Latest annual ({{ p.period_end }})</th><th class="num">Value</th></tr></thead>
+  <tbody>
+    <tr><td>Revenue</td><td class="num">{{ p.revenue | money if p.revenue is not none else MISSING }}</td></tr>
+    <tr><td>Revenue growth</td><td class="num">{{ view.revenue_growth | percent if view.revenue_growth is not none else MISSING }}</td></tr>
+    <tr><td>Gross margin</td><td class="num">{{ p.gross_margin | percent if p.gross_margin is not none else MISSING }}</td></tr>
+    <tr><td>Operating margin</td><td class="num">{{ p.operating_margin | percent if p.operating_margin is not none else MISSING }}</td></tr>
+    <tr><td>Net income</td><td class="num">{{ p.net_income | money if p.net_income is not none else MISSING }}</td></tr>
+    <tr><td>Free cash flow</td><td class="num">{{ p.free_cash_flow | money if p.free_cash_flow is not none else MISSING }}</td></tr>
+    <tr><td>Net debt</td><td class="num">{{ p.net_debt | money if p.net_debt is not none else MISSING }}</td></tr>
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% else %}
+<p class="muted">
+  No filed fundamentals. EDGAR is keyed by CIK and does not list foreign
+  issuers or most ETFs, so this may be a fact about the security rather than
+  a gap — the Data page distinguishes them.
+</p>
+{% endif %}
+
+{% if view.events %}
+<h2>Recent events</h2>
+<ul class="alerts">
+  {% for event in view.events %}
+  <li class="alert">
+    <div class="alert-head">
+      <span class="muted">{{ event.confirmation.replace('_', ' ') }}</span>
+      <span class="muted">×{{ event.article_count }} from {{ event.source_count }} source(s)</span>
+      <time class="muted">{{ event.last_seen|ago }}</time>
+    </div>
+    <p class="alert-title">{{ event.key_title }}</p>
+    <p class="muted small">{{ event.dimensions.replace(',', ' · ') or 'no financial dimension detected' }}</p>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

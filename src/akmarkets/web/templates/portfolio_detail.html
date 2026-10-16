@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% set currency = portfolio.base_currency %}
+{% set symbol_of = {} %}
+{% for id, instrument in instruments.items() %}{% set _ = symbol_of.update({id: instrument.symbol}) %}{% endfor %}
+
+<section class="lede">
+  <h1>{{ portfolio.name }}</h1>
+  <p class="muted">
+    {{ portfolio.cost_basis_method.value | upper }} ·
+    {{ currency }} ·
+    benchmark {{ portfolio.benchmark_symbol }} ·
+    <a href="/portfolios/{{ portfolio.portfolio_id }}/inbox">intelligence inbox</a> ·
+    <a href="/portfolios/{{ portfolio.portfolio_id }}/risk">risk</a>
+  </p>
+</section>
+
+{% if state.unpriced_instrument_ids %}
+<div class="banner error" role="alert">
+  <strong>Portfolio total unavailable.</strong>
+  No price for
+  {% for id in state.unpriced_instrument_ids %}<code>{{ symbol_of.get(id, id) }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+  A total that silently omits a holding looks right and is not, so it is
+  withheld rather than understated. Run <code>ak-markets prices &lt;symbol&gt;</code>.
+</div>
+{% endif %}
+
+{% if findings %}
+<div class="banner error" role="alert">
+  <strong>{{ findings | length }} issue(s) in this ledger.</strong>
+  {% for finding in findings[:3] %}{{ finding.message }}{% if not loop.last %} · {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<section class="cards">
+  <article class="card">
+    <h2>Value</h2>
+    <p class="value">{{ state.total_value | money(currency) }}</p>
+    <p class="muted">{{ state.cash_total | money(currency) }} cash</p>
+  </article>
+  <article class="card">
+    <h2>Unrealised</h2>
+    <p class="value {{ 'up' if state.unrealized_gain and state.unrealized_gain > 0 else 'down' if state.unrealized_gain and state.unrealized_gain < 0 }}">
+      {{ state.unrealized_gain | signed_money(currency) }}
+    </p>
+    <p class="muted">on {{ state.total_cost_basis | money(currency) }} cost</p>
+  </article>
+  <article class="card">
+    <h2>Realised</h2>
+    <p class="value {{ 'up' if state.realized_gain > 0 else 'down' if state.realized_gain < 0 }}">
+      {{ state.realized_gain | signed_money(currency) }}
+    </p>
+    <p class="muted">{{ state.disposals | length }} disposal(s) to date</p>
+  </article>
+</section>
+
+<h2>Performance</h2>
+<nav class="periods">
+  {% for name in periods %}
+  <a href="?period={{ name }}" class="{{ 'active' if name == period }}">{{ name }}</a>
+  {% endfor %}
+</nav>
+
+{% if report.summary and report.summary.time_weighted is not none %}
+<section class="cards">
+  <article class="card">
+    <h2>Return ({{ period }})</h2>
+    <p class="value {{ 'up' if report.summary.time_weighted > 0 else 'down' if report.summary.time_weighted < 0 }}">
+      {{ report.summary.time_weighted | percent }}
+    </p>
+    <p class="muted">time-weighted, deposits removed</p>
+  </article>
+  <article class="card">
+    <h2>{{ report.benchmark.symbol }}</h2>
+    <p class="value">{{ report.benchmark.benchmark | percent }}</p>
+    <p class="muted">same window, buy and hold</p>
+  </article>
+  <article class="card">
+    <h2>Relative</h2>
+    <p class="value {{ 'up' if report.benchmark.relative and report.benchmark.relative > 0 else 'down' if report.benchmark.relative and report.benchmark.relative < 0 }}">
+      {{ report.benchmark.relative | percent }}
+    </p>
+    <p class="muted">{{ report.start }} → {{ report.end }}</p>
+  </article>
+</section>
+
+{{ sparkline(report.series) }}
+{% else %}
+<p class="muted">
+  Not enough priced history to compute a return over this window.
+  {% if report.unpriced %}Missing prices for
+  {% for s in report.unpriced %}<code>{{ s }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.{% endif %}
+  Nothing is estimated to fill the gap.
+</p>
+{% endif %}
+
+{% if report.contributions %}
+<h2>What moved</h2>
+<div class="grid-wrap">
+<table class="grid">
+  <thead><tr><th>Instrument</th><th class="num">Profit</th><th>Share of movement</th></tr></thead>
+  <tbody>
+    {% for item in report.contributions %}
+    <tr>
+      <td><strong>{{ symbol_of.get(item.instrument_id, item.instrument_id) }}</strong></td>
+      <td class="num {{ 'up' if item.profit > 0 else 'down' if item.profit < 0 }}">
+        {{ item.profit | signed_money(currency) }}
+      </td>
+      <td>{{ bar(item.weight) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2>Positions</h2>
+{% if state.open_positions %}
+<div class="grid-wrap">
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Instrument</th><th class="num">Shares</th><th class="num">Avg cost</th>
+      <th class="num">Last</th><th class="num">Value</th><th class="num">Unrealised</th>
+      <th class="num">Weight</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for position in state.open_positions %}
+    <tr>
+      <td><strong><a href="/securities/{{ symbol_of.get(position.instrument_id, position.instrument_id) }}?portfolio={{ portfolio.portfolio_id }}">{{ symbol_of.get(position.instrument_id, position.instrument_id) }}</a></strong></td>
+      <td class="num">{{ position.quantity | quantity }}</td>
+      <td class="num">{{ position.average_cost | money(currency) }}</td>
+      <td class="num">{{ position.last_price | money(currency) }}</td>
+      <td class="num">{{ position.market_value | money(currency) }}</td>
+      <td class="num {{ 'up' if position.unrealized_gain and position.unrealized_gain > 0 else 'down' if position.unrealized_gain and position.unrealized_gain < 0 }}">
+        {{ position.unrealized_gain | signed_money(currency) }}
+      </td>
+      <td class="num">
+        {% if position.market_value is not none and state.positions_value %}
+          {{ (position.market_value / state.positions_value) | percent(1) }}
+        {% else %}{{ MISSING }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">No open positions. Record a purchase below.</p>
+{% endif %}
+
+<h2>Record a transaction</h2>
+<form method="post" action="/portfolios/{{ portfolio.portfolio_id }}/transactions" class="stack">
+  <div class="row">
+    <label>Type
+      <select name="transaction_type" id="tx-type">
+        {% for kind in transaction_types %}<option value="{{ kind }}">{{ kind }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Date
+      <input type="date" name="occurred_on" required value="{{ report.end }}">
+    </label>
+    <label>Symbol
+      <input name="symbol" placeholder="XMPL" autocapitalize="characters" autocomplete="off">
+    </label>
+  </div>
+  <div class="row">
+    <label>Quantity <input name="quantity" inputmode="decimal" placeholder="100"></label>
+    <label>Price <input name="price" inputmode="decimal" placeholder="10.40"></label>
+    <label>Fees <input name="fees" inputmode="decimal" placeholder="0"></label>
+  </div>
+  <div class="row">
+    <label>Amount <input name="amount" inputmode="decimal" placeholder="cash events only"></label>
+    <label>Split ratio <input name="split_ratio" inputmode="decimal" placeholder="3 = 3-for-1"></label>
+  </div>
+  <label>Note <input name="note" placeholder="why, optional" autocomplete="off"></label>
+  <p class="muted small">
+    Quantity, price and fees are always positive — direction comes from the
+    type. Backdating is expected: positions are re-derived from the whole
+    ledger, so a trade entered late but dated early corrects every figure
+    after it.
+  </p>
+  <button type="submit">Record</button>
+</form>
+
+{% if transactions %}
+<h2>Ledger</h2>
+<div class="grid-wrap">
+<table class="grid">
+  <thead>
+    <tr><th>Date</th><th>Type</th><th>Instrument</th><th class="num">Qty</th>
+        <th class="num">Price</th><th class="num">Fees</th><th class="num">Amount</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for transaction in transactions %}
+    <tr>
+      <td>{{ transaction.occurred_on }}</td>
+      <td>{{ transaction.transaction_type.value }}</td>
+      <td>{{ symbol_of.get(transaction.instrument_id, MISSING) }}</td>
+      <td class="num">{{ transaction.quantity | quantity if transaction.quantity else MISSING }}</td>
+      <td class="num">{{ transaction.price | money(currency) if transaction.price else MISSING }}</td>
+      <td class="num">{{ transaction.fees | money(currency) if transaction.fees else MISSING }}</td>
+      <td class="num">{{ transaction.amount | money(currency) if transaction.amount else MISSING }}</td>
+      <td>
+        <form method="post"
+              action="/portfolios/{{ portfolio.portfolio_id }}/transactions/{{ transaction.transaction_id }}/delete">
+          <button type="submit" class="link">delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

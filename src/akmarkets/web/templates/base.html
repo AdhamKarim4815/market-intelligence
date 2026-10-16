@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{{ title }} · AK Markets</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <a class="brand" href="/">AK<span>Markets</span></a>
+    <nav>
+      <a href="/">Overview</a>
+      <a href="/portfolios">Portfolios</a>
+      {# Inbox and risk are portfolio-scoped, so these are redirect
+         resolvers. A static host cannot serve a 303, so the snapshot omits
+         them rather than shipping two links that 404. #}
+      {% if not static_export %}
+      <a href="/inbox">Inbox</a>
+      <a href="/risk">Risk</a>
+      {% endif %}
+      <a href="/markets">Markets</a>
+      <a href="/jobs">Jobs</a>
+      <a href="/health">Health</a>
+    </nav>
+  </header>
+
+  {% if not static_export %}
+  <div class="statusbar" id="statusbar" data-idle="idle">
+    <span class="dot" aria-hidden="true"></span>
+    <span id="status-message">idle</span>
+  </div>
+  {% else %}
+  <div class="statusbar static">
+    <span class="dot" aria-hidden="true"></span>
+    <span>Static snapshot{% if exported_at %} · {{ exported_at|ago }}{% endif %}</span>
+  </div>
+  {% endif %}
+
+  {% if schema_error %}
+  <div class="banner error" role="alert">
+    <strong>Schema mismatch.</strong> {{ schema_error }}
+    Run <code>ak-markets db migrate</code> with an owner credential.
+  </div>
+  {% endif %}
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <p>Research and monitoring only. Nothing here places an order, connects to
+       a broker, or constitutes financial advice.</p>
+  </footer>
+
+  {% if not static_export %}
+  <script src="/static/status.js" defer></script>
+  {% endif %}
+</body>
+</html>

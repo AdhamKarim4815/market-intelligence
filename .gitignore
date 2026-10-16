@@ -1,0 +1,31 @@
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Runtime state: caches, databases, generated reports. Everything here is
+# reproducible from the providers and the database, and none of it belongs
+# in version control.
+var/
+artifacts/
+
+# Secrets never enter the repository. Provider keys live in the macOS
+# keychain locally and in GitHub Actions secrets in CI.
+.env
+.env.*
+*.pem
+
+.DS_Store
+.wrangler/
+
+# Tunnel credentials are secrets.
+deploy/cloudflared/*.json
+
+.claude/

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block content %}
+{% set r = report %}
+
+<section class="lede">
+  <h1>{{ portfolio.name }} — Risk</h1>
+  <p class="muted">
+    <a href="/portfolios/{{ portfolio.portfolio_id }}">← back to the portfolio</a>
+    · {{ r.observations }} aligned observation(s) to {{ r.as_of }}
+  </p>
+</section>
+
+{% if r.insufficient_history %}
+<div class="banner error" role="alert">
+  <strong>Not every holding is in these figures.</strong>
+  {% for s in r.insufficient_history %}<code>{{ s }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+  {{ 'has' if r.insufficient_history|length == 1 else 'have' }} too little price
+  history. A statistic covering part of a portfolio must not read as one
+  covering all of it.
+</div>
+{% endif %}
+
+<section class="cards">
+  <article class="card">
+    <h2>Effective positions</h2>
+    <p class="value">
+      {% if r.concentration and r.concentration.effective_positions is not none %}
+        {{ r.concentration.effective_positions | round(1) }}
+      {% else %}{{ MISSING }}{% endif %}
+    </p>
+    <p class="muted">
+      {% if r.concentration %}largest {{ r.concentration.largest[0] }}
+      at {{ r.concentration.largest[1] | percent(1) }}{% endif %}
+    </p>
+  </article>
+  <article class="card">
+    <h2>Portfolio beta</h2>
+    <p class="value">{{ r.portfolio_beta | round(2) if r.portfolio_beta is not none else MISSING }}</p>
+    <p class="muted">
+      {% if r.portfolio_beta is none %}too little history to measure
+      {% else %}vs {{ portfolio.benchmark_symbol }}, {{ r.betas | length }} holding(s) measured{% endif %}
+    </p>
+  </article>
+  <article class="card">
+    <h2>Daily volatility</h2>
+    <p class="value">{{ r.volatility | percent(2) if r.volatility is not none else MISSING }}</p>
+    <p class="muted">
+      {% if r.volatility is none %}fewer than 60 observations
+      {% else %}not annualised — a short sample cannot support it{% endif %}
+    </p>
+  </article>
+</section>
+
+<h2>Concentration</h2>
+<p class="muted small">
+  A count, not a judgement. Concentration is a choice; the page's job is to
+  make it visible rather than disapprove of it.
+</p>
+<div class="grid-wrap">
+<table class="grid">
+  <thead><tr><th>Symbol</th><th class="num">Weight</th><th class="num">Beta</th><th>Share</th></tr></thead>
+  <tbody>
+    {% for symbol, weight in r.weights | dictsort(by='value', reverse=true) %}
+    <tr>
+      <td><strong><a href="/securities/{{ symbol }}?portfolio={{ portfolio.portfolio_id }}">{{ symbol }}</a></strong></td>
+      <td class="num">{{ weight | percent(1) }}</td>
+      <td class="num">{{ r.betas[symbol] | round(2) if symbol in r.betas else MISSING }}</td>
+      <td>{{ bar(weight) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if r.sector_exposure %}
+<h2>Sector exposure</h2>
+<div class="grid-wrap">
+<table class="grid">
+  <tbody>
+    {% for sector, weight in r.sector_exposure.items() %}
+    <tr><td>{{ sector }}</td><td class="num">{{ weight | percent(1) }}</td><td>{{ bar(weight) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2>Hidden correlation</h2>
+{% if r.clusters %}
+<p class="muted small">
+  Holdings that look different and move together. A portfolio of ten stocks
+  can still be one concentrated bet.
+</p>
+<ul class="alerts">
+  {% for cluster in r.clusters %}
+  <li class="alert {{ 'severity-important' if cluster.is_significant }}">
+    <div class="alert-head">
+      <span class="symbols">{{ cluster.members | join(' · ') }}</span>
+      <span class="muted">average correlation {{ cluster.average_correlation | round(2) }}</span>
+    </div>
+    <p class="muted small">
+      {{ cluster.combined_weight | percent(1) }} of the portfolio moves largely
+      as one position.
+    </p>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">
+  No clusters above the correlation threshold — or not enough aligned history
+  to look. Both are stated rather than presented as a clean bill of health.
+</p>
+{% endif %}
+
+<h2>Stress scenarios</h2>
+{% for scenario in r.scenarios %}
+<div class="grid-wrap">
+<table class="grid">
+  <thead>
+    <tr><th>{{ scenario.scenario }}</th>
+        <th class="num">{{ scenario.portfolio_change | percent(2) }}</th></tr>
+  </thead>
+  <tbody>
+    {% for symbol, impact in scenario.by_symbol.items() %}
+    <tr><td>{{ symbol }}</td><td class="num {{ 'down' if impact < 0 else 'up' }}">{{ impact | percent(2) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted small">
+  {% if scenario.unmodelled %}
+  Not modelled: {% for s in scenario.unmodelled %}<code>{{ s }}</code>{% if not loop.last %}, {% endif %}{% endfor %} —
+  no measured sensitivity. Assuming zero would understate the impact and
+  assuming one would overstate it.<br>
+  {% endif %}
+  {% for assumption in scenario.assumptions %}{{ assumption }}{% if not loop.last %}; {% endif %}{% endfor %}
+</p>
+<p class="muted small"><em>{{ scenario.caveat }}</em></p>
+{% endfor %}
+{% endblock %}

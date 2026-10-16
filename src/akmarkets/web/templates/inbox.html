@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="lede">
+  <h1>{{ portfolio.name }} — Inbox</h1>
+  <p class="muted">
+    <a href="/portfolios/{{ portfolio.portfolio_id }}">← back to the portfolio</a>
+  </p>
+</section>
+
+{% set critical = counts.get('critical', 0) %}
+{% set important = counts.get('important', 0) %}
+{% set watch = counts.get('watch', 0) %}
+{% set total = critical + important + watch %}
+
+<section class="attention">
+  {% if total %}
+  <p class="headline">
+    <strong>{{ total }}</strong> item{{ '' if total == 1 else 's' }} deserve{{ 's' if total == 1 else '' }} attention.
+  </p>
+  <p class="muted">
+    {% if critical %}<span class="state state-failed">{{ critical }} critical</span>{% endif %}
+    {% if important %}<span class="state state-degraded">{{ important }} important</span>{% endif %}
+    {% if watch %}<span class="state state-unknown">{{ watch }} watch</span>{% endif %}
+  </p>
+  {% else %}
+  <p class="headline">Nothing needs your attention.</p>
+  <p class="muted">
+    Events below the watch threshold are still collected and readable — they
+    are simply not pushed at you.
+  </p>
+  {% endif %}
+</section>
+
+<nav class="periods">
+  {% for option in ['unread', 'read', 'all'] %}
+  <a href="?show={{ option }}" class="{{ 'active' if option == show }}">{{ option }}</a>
+  {% endfor %}
+</nav>
+
+{% if alerts %}
+<ul class="alerts">
+  {% for alert in alerts %}
+  <li class="alert severity-{{ alert.severity }}">
+    <div class="alert-head">
+      <span class="state state-{{ 'failed' if alert.severity == 'critical' else 'degraded' if alert.severity == 'important' else 'unknown' }}">
+        {{ alert.severity }}
+      </span>
+      <span class="symbols">{{ alert.symbols.replace(',', ' · ') or MISSING }}</span>
+      <time class="muted">{{ alert.created_at|ago }}</time>
+    </div>
+    <p class="alert-title">{{ alert.title }}</p>
+    <p class="muted small">{{ alert.body }}</p>
+    <details>
+      <summary class="muted small">Why this reached you</summary>
+      <p class="muted small mono">{{ alert.explanation }}</p>
+      <p class="muted small">
+        Every factor is multiplied, not added: a hugely material event in a
+        position you barely hold should not reach you, and neither should a
+        certain, fresh report about nothing.
+      </p>
+    </details>
+    {% if not static_export %}
+    <div class="alert-actions">
+      {% for action, label in [('read', 'mark read'), ('archive', 'archive'), ('mute', 'mute this story')] %}
+      <form method="post" action="/portfolios/{{ portfolio.portfolio_id }}/inbox/{{ alert.alert_id }}/{{ action }}">
+        <button type="submit" class="link">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Nothing here. Run <code>ak-markets refresh --stage news</code>.</p>
+{% endif %}
+
+<h2>Watchlist</h2>
+<p class="muted small">
+  Separate from what you own. Something you are considering is exactly when
+  news matters most — by the time you hold it, you have already decided.
+  Tier sets how loudly it is monitored.
+</p>
+
+{% if watchlist %}
+<div class="grid-wrap">
+<table class="grid">
+  <thead><tr><th>Symbol</th><th>Tier</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+    {% for entry in watchlist %}
+    <tr>
+      <td><strong>{{ entry.symbol }}</strong></td>
+      <td>{{ entry.tier }}</td>
+      <td class="detail">{{ entry.note or MISSING }}</td>
+      <td>
+        {% if not static_export %}
+        <form method="post" action="/portfolios/{{ portfolio.portfolio_id }}/watchlist/{{ entry.symbol }}/remove">
+          <button type="submit" class="link">remove</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Nothing watched yet.</p>
+{% endif %}
+
+{% if not static_export %}
+<form method="post" action="/portfolios/{{ portfolio.portfolio_id }}/watchlist" class="stack">
+  <div class="row">
+    <label>Symbol <input name="symbol" placeholder="ALB" autocapitalize="characters" autocomplete="off"></label>
+    <label>Tier
+      <select name="tier">
+        <option value="B">B — priority</option>
+        <option value="C" selected>C — normal</option>
+        <option value="D">D — universe</option>
+      </select>
+    </label>
+  </div>
+  <label>Note <input name="note" placeholder="why you are watching it" autocomplete="off"></label>
+  <button type="submit">Watch</button>
+</form>
+{% endif %}
+{% endblock %}

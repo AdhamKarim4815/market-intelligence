@@ -1,0 +1,55 @@
+# Business decisions live here, not in environment variables. The
+# environment carries secrets and the database URL; everything that a person
+# would want to reconsider belongs in a file that is reviewed and versioned.
+#
+# Every value below is also a model default in `akmarkets.config`, so the
+# application runs correctly with this file deleted. It exists to make the
+# decisions visible and editable in one place.
+
+[portfolio]
+# A view over the transaction log, not a property of it. Lots are always
+# preserved individually, so changing this re-derives every figure rather
+# than migrating any stored value.
+default_cost_basis_method = "fifo"
+default_currency = "USD"
+default_benchmark_symbol = "SPY"
+
+[prices]
+# Tried left to right until one returns a non-empty frame. All three are
+# free and need no account.
+# Stooq was removed on 2026-08-10: it now answers with a JavaScript
+# proof-of-work challenge rather than data. Left in the list it was
+# silently skipped — the chain ignores names with no adapter — so the
+# configuration advertised a fallback that could never be built.
+provider_priority = ["nasdaq", "yahoo"]
+history_days = 1825
+exchange_calendar = "NYSE"
+# Two providers disagreeing by more than this on a close is recorded as a
+# data-quality finding rather than silently resolved by provider order.
+disagreement_tolerance_pct = 0.5
+
+[fundamentals]
+# EDGAR requires a contactable User-Agent and rate-limits to ten requests a
+# second. Both are conditions of use, not performance tuning. The contact
+# address comes from the AKM_EDGAR_CONTACT environment variable (default:
+# the placeholder you@example.com), not from this file.
+edgar_requests_per_second = 8.0
+
+[news]
+lookback_days = 14
+max_items_per_feed = 50
+# Cosine similarity above which two articles are treated as the same story.
+# Calibrated against a labelled sample in M5; until then the pipeline uses
+# exact-hash deduplication only and this value is unused.
+near_duplicate_threshold = 0.86
+
+[ai]
+# The platform is required to be fully usable with no LLM at all, so every
+# tier is off until explicitly enabled.
+enabled = false
+tier1_local_enabled = false
+tier2_model = "gpt-4o-mini"
+tier3_model = "gpt-4o"
+# A hard stop, not a target: the router refuses a call that would take the
+# day's recorded spend past this.
+daily_cost_ceiling_usd = 1.0

@@ -1,0 +1,366 @@
+/* Mobile-first. The phone layout is the design, not a compressed desktop
+   one -- this is also the information architecture a future iOS client
+   inherits, so getting the hierarchy right on a small screen first is doing
+   that work once rather than twice.
+
+   No build step, no framework, no CDN. One stylesheet and one small script,
+   both served from the app. */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #ffffff;
+  --surface: #f6f7f9;
+  --border: #dfe3e8;
+  --text: #14181d;
+  --muted: #5b6673;
+  --accent: #1f6feb;
+
+  --up: #0f7b42;
+  --down: #b4232b;
+  --warn: #a15c00;
+
+  --radius: 10px;
+  --gap: 1rem;
+  --measure: 68ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116;
+    --surface: #161b22;
+    --border: #2a313a;
+    --text: #e6edf3;
+    --muted: #9aa7b4;
+    --accent: #5a9bff;
+    --up: #3fb96f;
+    --down: #f0656d;
+    --warn: #e0a33a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+.skip:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+  z-index: 10;
+  background: var(--bg);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+/* -- chrome ------------------------------------------------------------ */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: var(--text);
+}
+.brand span { color: var(--muted); font-weight: 500; }
+
+.topbar nav {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+.topbar nav a { color: var(--muted); text-decoration: none; }
+.topbar nav a:hover { color: var(--text); }
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.statusbar .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.statusbar[data-busy="true"] .dot { background: var(--accent); }
+
+.banner {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.banner.error {
+  background: color-mix(in srgb, var(--down) 12%, var(--bg));
+  border-bottom-color: var(--down);
+}
+
+main {
+  padding: 1.25rem 1rem 3rem;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 1rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+/* -- content ----------------------------------------------------------- */
+
+h1 { font-size: 1.5rem; letter-spacing: -0.02em; margin: 0 0 0.35rem; }
+h2 { font-size: 1.05rem; letter-spacing: -0.01em; margin: 1.75rem 0 0.6rem; }
+
+.lede p { max-width: var(--measure); margin: 0; }
+.muted { color: var(--muted); }
+.note { font-size: 0.85rem; margin-top: 1rem; max-width: var(--measure); }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--surface);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+  margin-top: 1.5rem;
+}
+@media (min-width: 40rem) {
+  .cards { grid-template-columns: repeat(3, 1fr); }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+}
+.card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.card .value {
+  margin: 0 0 0.2rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.card .muted { font-size: 0.82rem; margin: 0; }
+
+/* Wide content scrolls inside its own container; the page body never
+   scrolls sideways on a phone. */
+.grid-wrap { overflow-x: auto; }
+
+table.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+table.grid th,
+table.grid td {
+  text-align: left;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+table.grid th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+table.grid td.detail { color: var(--muted); font-size: 0.85rem; }
+
+/* Figures line up column-wise; a portfolio is read by scanning down. */
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+
+.state {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid currentColor;
+}
+.state-healthy { color: var(--up); }
+.state-degraded, .state-delayed, .state-stale { color: var(--warn); }
+.state-failed { color: var(--down); }
+.state-unknown { color: var(--muted); }
+
+ul.activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.87rem;
+}
+ul.activity li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 0.6rem;
+}
+ul.activity time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+ul.activity li.level-warn { color: var(--warn); }
+ul.activity li.level-error { color: var(--down); }
+ul.activity li.level-success { color: var(--up); }
+
+/* -- forms -------------------------------------------------------------- */
+
+form.stack { display: flex; flex-direction: column; gap: 0.75rem; max-width: 44rem; }
+form.stack .row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+form.stack .row label { flex: 1 1 8rem; }
+
+label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+
+input, select {
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+  /* 16px minimum stops iOS Safari zooming the viewport on focus, which on
+     a phone reads as the page jumping when you tap a field. */
+  min-height: 2.5rem;
+}
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  align-self: flex-start;
+  min-height: 2.75rem;  /* comfortable tap target */
+}
+button.link {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.8rem;
+  padding: 0;
+  min-height: 0;
+  text-decoration: underline;
+}
+button.link:hover { color: var(--down); }
+
+.small { font-size: 0.8rem; }
+
+/* -- period switcher ---------------------------------------------------- */
+
+nav.periods { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0 1rem; }
+nav.periods a {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  text-decoration: none;
+  color: var(--muted);
+}
+nav.periods a.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+/* -- figures ------------------------------------------------------------ */
+
+svg.sparkline {
+  width: 100%;
+  height: 56px;
+  display: block;
+  margin: 0.5rem 0 1rem;
+  overflow: visible;
+}
+
+.bar {
+  position: relative;
+  display: block;
+  height: 8px;
+  min-width: 6rem;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill { position: absolute; top: 0; bottom: 0; }
+
+/* -- inbox -------------------------------------------------------------- */
+
+.attention { margin: 1.5rem 0 0.5rem; }
+.attention .headline { font-size: 1.15rem; margin: 0 0 0.35rem; }
+.attention .state { margin-right: 0.4rem; }
+
+ul.alerts { list-style: none; margin: 0; padding: 0; display: flex;
+            flex-direction: column; gap: 0.75rem; }
+
+.alert {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  background: var(--surface);
+}
+/* The left rule carries the severity, so the list is scannable down the
+   edge without reading a single word. */
+.alert.severity-critical  { border-left-color: var(--down); }
+.alert.severity-important { border-left-color: var(--warn); }
+.alert.severity-watch     { border-left-color: var(--accent); }
+
+.alert-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+              font-size: 0.78rem; margin-bottom: 0.35rem; }
+.alert-head .symbols { font-weight: 600; letter-spacing: 0.02em; }
+.alert-title { margin: 0 0 0.25rem; font-size: 0.98rem; line-height: 1.4; }
+.alert p { margin: 0 0 0.25rem; }
+.alert details { margin-top: 0.35rem; }
+.alert summary { cursor: pointer; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.alert-actions { display: flex; gap: 0.9rem; margin-top: 0.5rem; }
+.alert-actions form { margin: 0; }

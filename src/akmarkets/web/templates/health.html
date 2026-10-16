@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="lede">
+  <h1>System health</h1>
+  <p class="muted">
+    Version {{ health.version }} · {{ health.env }} ·
+    overall <span class="state state-{{ health.state }}">{{ health.state }}</span>
+  </p>
+</section>
+
+<table class="grid">
+  <thead>
+    <tr><th>Component</th><th>State</th><th>Detail</th></tr>
+  </thead>
+  <tbody>
+    {% for component in health.components %}
+    <tr>
+      <td>{{ component.name }}</td>
+      <td><span class="state state-{{ component.state }}">{{ component.state }}</span></td>
+      <td class="detail">{{ component.detail }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Open data findings</h2>
+{% if health.findings %}
+<div class="grid-wrap">
+<table class="grid">
+  <thead>
+    <tr><th>Severity</th><th>Code</th><th>Subject</th><th>Detail</th><th>Seen</th></tr>
+  </thead>
+  <tbody>
+    {% for finding in health.findings %}
+    <tr>
+      <td><span class="state state-{{ 'failed' if finding.severity == 'error' else 'degraded' }}">{{ finding.severity }}</span></td>
+      <td><code>{{ finding.code }}</code></td>
+      <td>{{ finding.subject or MISSING }}</td>
+      <td class="detail">{{ finding.message }}</td>
+      <td class="detail">{{ finding.detected_at|ago }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Nothing outstanding. A finding is recorded whenever data is
+   missing, stale, conflicting or implausible — never silently corrected.</p>
+{% endif %}
+
+<p class="muted note">
+  A component with no recent information reports <code>unknown</code>, never
+  <code>healthy</code>. Stale data is never presented as current.
+</p>
+{% endblock %}

@@ -1,0 +1,36 @@
+# The quality gate. Runs on every push and pull request.
+#
+# Deliberately separate from the scheduled refresh: a data provider being
+# down at 22:15 must not look like a broken build, and a failing test must
+# not be discovered only when the nightly job happens to run.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # No extras. The base install has to be enough to run the suite, and
+      # this is what proves it stays that way — an optional dependency that
+      # quietly becomes required would pass locally and fail here.
+      - run: uv sync --frozen
+
+      - run: uv run ruff check src tests
+      - run: uv run mypy
+      - run: uv run pytest

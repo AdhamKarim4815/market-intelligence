@@ -1,0 +1,95 @@
+# EXAMPLE ONLY. Copy to .github/workflows/ in your own repository to enable it.
+# It is not active here, because it needs a repository secret
+# (AKM_DATABASE_URL, a postgresql+psycopg:// URL for a database you run) that
+# only you can provide. See DEPLOY.md.
+#
+# Daily, after the close has settled.
+#
+# 22:15 UTC is 18:15 Eastern in summer and 17:15 in winter — comfortably
+# past the 16:00 bell in both offsets, which a fixed local-time cron cannot
+# manage because GitHub's scheduler runs on UTC and does not observe DST.
+name: End of day
+
+on:
+  schedule:
+    - cron: "15 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Run only this stage (blank = all)"
+        required: false
+        default: ""
+
+# Never cancel a run in flight. The database lock would be left to expire,
+# and the next run would refuse to start for half an hour.
+concurrency:
+  group: end-of-day
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --frozen --extra postgres
+
+      # Daily bars never change once a session has settled, so re-fetching
+      # five years of history every night would be pure waste. The rolling
+      # key means each run restores the previous run's cache and saves its
+      # own; `restore-keys` is the prefix that makes that work.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            var/prices
+            var/fundamentals
+          key: akmarkets-data-${{ github.run_id }}
+          restore-keys: akmarkets-data-
+
+      # First, and before anything that could otherwise be blamed on the
+      # application. A connection problem should say so plainly.
+      - name: Check the database
+        run: uv run ak-markets db check
+        env:
+          AKM_DATABASE_URL: ${{ secrets.AKM_DATABASE_URL }}
+
+      - name: Verify the schema
+        run: uv run ak-markets db status
+        env:
+          AKM_DATABASE_URL: ${{ secrets.AKM_DATABASE_URL }}
+
+      - name: Refresh
+        id: refresh
+        # Exit 2 means stages degraded, which is a real outcome and not a
+        # build failure: a provider being down should show on the health
+        # page, not turn the repository red every time a free feed hiccups.
+        run: |
+          set +e
+          uv run ak-markets refresh ${{ inputs.stage && format('--stage {0}', inputs.stage) || '' }} | tee refresh.log
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" -le 2 ] || exit "$code"
+        env:
+          AKM_DATABASE_URL: ${{ secrets.AKM_DATABASE_URL }}
+          AKM_ENV: production
+          AKM_SOURCE: github-actions-eod
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### End-of-day refresh"
+            echo ""
+            echo '```'
+            cat refresh.log 2>/dev/null || echo "(no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Flag a degraded run
+        if: steps.refresh.outputs.code == '2'
+        run: echo "::warning::refresh completed with degraded stages — see /health"

@@ -1,0 +1,134 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "akmarkets"
+version = "0.1.0"
+description = "Market Intelligence Platform: portfolio, monitoring and research, without execution"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Private" }
+authors = [{ name = "Adham Karim" }]
+dependencies = [
+  # XML/RSS parsing for SEC filing indexes and news feeds, hardened against
+  # entity expansion attacks. Every ingest source here is XML or JSON.
+  "defusedxml>=0.7,<1",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "jinja2>=3.1,<4",
+  # Provider keys are optional; when present they belong in the system
+  # keychain rather than a dotfile.
+  "keyring>=25.6,<26",
+  "numpy>=2.1,<3",
+  "pandas>=2.2,<3",
+  # Exchange sessions and holidays. Freshness here is "do we hold the last
+  # completed session's close", which needs a real calendar, not a clock.
+  "pandas-market-calendars>=4.6,<5",
+  # Parquet engine for the OHLCV cache under var/.
+  "pyarrow>=19,<24",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  # FastAPI form handling for transaction entry.
+  "python-multipart>=0.0.20,<1",
+  "sqlalchemy>=2.0,<3",
+  "typer>=0.15,<1",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+# Optional: Supabase/Postgres instead of local SQLite. Local development
+# must work with no cloud credentials at all, so this is not a base dep.
+postgres = [
+  "psycopg[binary]>=3.2,<4",
+]
+# Optional: the Tier-1 local models -- sentence embeddings for news
+# near-duplicate detection and clustering, and a finance sentiment
+# classifier. The news pipeline degrades to a lexicon and exact-hash
+# deduplication without them, so several hundred MB of torch stays out of
+# the base install.
+ml = [
+  "sentence-transformers>=3.3,<6",
+  "scikit-learn>=1.6,<2",
+]
+# Optional: Tier-2/Tier-3 LLM synthesis. The platform is required to be
+# fully usable with no LLM at all, so this is never a base dependency.
+ai = [
+  "openai>=1.60,<3",
+]
+
+[dependency-groups]
+dev = [
+  "hypothesis>=6.127,<7",
+  "mypy>=1.15,<2",
+  "pandas-stubs>=2.2,<3",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<7",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+ak-markets = "akmarkets.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/akmarkets"]
+
+[tool.hatch.build]
+include = [
+  "src/akmarkets/**/*.py",
+  "src/akmarkets/py.typed",
+  "src/akmarkets/web/templates/**",
+  "src/akmarkets/web/static/**",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --disable-warnings -m 'not optional_ml and not network'"
+testpaths = ["tests"]
+markers = [
+  "optional_ml: requires the local embedding/sentiment model set (--extra ml)",
+  "network: reaches a live external provider; excluded from the default run",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["akmarkets"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+  # FastAPI's dependency injection is function calls in argument defaults.
+  "B008",
+  # Comments and docstrings in this project state the arithmetic behind a
+  # figure -- "40 × 10 − 5 = $395", "—" for a missing value. Typographic
+  # minus, multiplication sign and em dash are the right characters there,
+  # and these rules would have them replaced with ASCII lookalikes that
+  # read worse. Identifiers are unaffected; only prose is exempted.
+  "RUF001",
+  "RUF002",
+  "RUF003",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["akmarkets"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+  "defusedxml.*",
+  "keyring.*",
+  "pandas_market_calendars.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Installed only with the `ml`/`ai`/`postgres` extras. Each importing module
+# degrades to a documented no-op when they are absent, so type checking must
+# not require them to be present.
+module = ["sentence_transformers.*", "sklearn.*", "openai.*", "psycopg.*"]
+ignore_missing_imports = true

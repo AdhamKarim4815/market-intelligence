@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="lede">
+  <h1>Portfolios</h1>
+  <p class="muted">Signed in as {{ identity.email }}.</p>
+</section>
+
+{% if summaries %}
+<div class="cards">
+  {% for row in summaries %}
+  <article class="card">
+    <h2><a href="/portfolios/{{ row.portfolio.portfolio_id }}">{{ row.portfolio.name }}</a></h2>
+    <p class="value">{{ row.state.total_value | money(row.portfolio.base_currency) }}</p>
+    <p class="muted">
+      {{ row.state.open_positions | length }} position(s) ·
+      {{ row.portfolio.cost_basis_method.value | upper }} ·
+      vs {{ row.portfolio.benchmark_symbol }}
+    </p>
+    {% if row.state.unpriced_instrument_ids %}
+    <p class="muted"><span class="state state-degraded">unpriced</span>
+       total unavailable until every holding has a price</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No portfolios yet. Create one below, then record your trades.</p>
+{% endif %}
+
+<h2>New portfolio</h2>
+<form method="post" action="/portfolios" class="stack">
+  <label>Name
+    <input name="name" required placeholder="Long Term" autocomplete="off">
+  </label>
+  <div class="row">
+    <label>Currency
+      <input name="base_currency" value="USD" size="4" maxlength="3">
+    </label>
+    <label>Cost basis
+      <select name="cost_basis_method">
+        <option value="fifo">FIFO</option>
+        <option value="lifo">LIFO</option>
+        <option value="average">Average</option>
+      </select>
+    </label>
+    <label>Benchmark
+      <input name="benchmark_symbol" value="SPY" size="6">
+    </label>
+  </div>
+  <p class="muted small">Cost basis is a view over the ledger, not a property of it —
+     every lot is kept, so changing this later re-derives every figure rather
+     than migrating anything.</p>
+  <button type="submit">Create portfolio</button>
+</form>
+{% endblock %}

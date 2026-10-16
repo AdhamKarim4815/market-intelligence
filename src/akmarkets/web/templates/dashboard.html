@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="lede">
+  <h1>Overview</h1>
+  {% if identity %}
+  <p class="muted">
+    {# Printing the identity is a control, not decoration: behind a
+       perimeter, being authenticated as the wrong person is otherwise
+       completely silent. #}
+    Signed in as <strong>{{ identity.email }}</strong>
+    · via {{ identity.via }} · v{{ version }}
+  </p>
+  {% endif %}
+</section>
+
+{% if overview and overview.degraded %}
+<div class="banner error" role="alert">
+  <strong>{{ overview.degraded|length }} section(s) could not be read:</strong>
+  {{ overview.degraded|join(', ') }}.
+  These are shown as unavailable rather than as empty — the two mean
+  different things.
+</div>
+{% endif %}
+
+{% if overview and overview.is_empty %}
+<section class="cards">
+  <article class="card">
+    <h2>Portfolio</h2>
+    <p class="value">{{ MISSING }}</p>
+    <p class="muted">
+      No portfolio yet. <a href="/portfolios">Create one</a>, then record
+      your trades.
+    </p>
+  </article>
+</section>
+{% endif %}
+
+{% for card in (overview.portfolios if overview else []) %}
+<section>
+  <h2>
+    <a href="/portfolios/{{ card.portfolio.portfolio_id }}">{{ card.portfolio.name }}</a>
+    <span class="small muted">
+      · <a href="/portfolios/{{ card.portfolio.portfolio_id }}/inbox">inbox</a>
+      · <a href="/portfolios/{{ card.portfolio.portfolio_id }}/risk">risk</a>
+      · {{ card.portfolio.cost_basis_method }} · {{ card.portfolio.base_currency }}
+    </span>
+  </h2>
+
+  {% if card.state.unpriced_instrument_ids %}
+  <div class="banner error" role="alert">
+    <strong>{{ card.state.unpriced_instrument_ids|length }} holding(s) unpriced.</strong>
+    The total is withheld rather than understated.
+  </div>
+  {% endif %}
+  {% if card.finding_count %}
+  <div class="banner error" role="alert">
+    <strong>{{ card.finding_count }} issue(s) in this ledger.</strong>
+    <a href="/portfolios/{{ card.portfolio.portfolio_id }}">Review</a>.
+  </div>
+  {% endif %}
+
+  <div class="cards">
+    <article class="card">
+      <h3>Value</h3>
+      <p class="value">{{ card.state.total_value|money(card.portfolio.base_currency) }}</p>
+      <p class="muted">{{ card.state.cash_total|money(card.portfolio.base_currency) }} cash</p>
+    </article>
+    <article class="card">
+      <h3>Unrealised</h3>
+      <p class="value {% if card.state.unrealized_gain and card.state.unrealized_gain > 0 %}up{% elif card.state.unrealized_gain and card.state.unrealized_gain < 0 %}down{% endif %}">
+        {{ card.state.unrealized_gain|signed_money(card.portfolio.base_currency) }}
+      </p>
+      <p class="muted">on {{ card.state.total_cost_basis|money(card.portfolio.base_currency) }} cost</p>
+    </article>
+    <article class="card">
+      <h3>Return ({{ period }})</h3>
+      <p class="value">
+        {{ (card.report.summary.time_weighted if card.report and card.report.summary else None)|percent }}
+      </p>
+      <p class="muted">time-weighted, deposits removed</p>
+    </article>
+    <article class="card">
+      <h3>vs {{ card.report.benchmark.symbol if card.report else card.portfolio.benchmark_symbol }}</h3>
+      <p class="value {% if card.report and card.report.benchmark.relative and card.report.benchmark.relative > 0 %}up{% elif card.report and card.report.benchmark.relative and card.report.benchmark.relative < 0 %}down{% endif %}">
+        {{ (card.report.benchmark.relative if card.report else None)|percent }}
+      </p>
+      <p class="muted">
+        {{ (card.report.benchmark.benchmark if card.report else None)|percent }} benchmark
+      </p>
+    </article>
+  </div>
+
+  <nav class="periods">
+    {% for name in periods %}
+    <a href="/?period={{ name }}"{% if name == period %} aria-current="page"{% endif %}>{{ name }}</a>
+    {% endfor %}
+  </nav>
+
+  {% if card.report and card.report.series %}
+  {{ sparkline(card.report.series) }}
+  {% endif %}
+
+  {% if card.unread_total %}
+  <h3>Needs attention</h3>
+  <p class="attention">
+    <span class="headline">{{ card.unread_total }} unread</span>
+    {% for severity, count in card.unread.items() if count %}
+    <span class="state state-{{ 'failed' if severity == 'critical' else 'degraded' if severity == 'important' else 'unknown' }}">{{ count }} {{ severity }}</span>
+    {% endfor %}
+    <a href="/portfolios/{{ card.portfolio.portfolio_id }}/inbox">open inbox</a>
+  </p>
+  <ul class="activity">
+    {% for alert in card.top_alerts %}
+    <li>
+      <span class="state state-{{ 'failed' if alert.severity == 'critical' else 'degraded' if alert.severity == 'important' else 'unknown' }}">{{ alert.severity }}</span>
+      {{ alert.symbols or '—' }} — {{ alert.title }}
+      <span class="muted small">{{ alert.created_at|ago }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if card.top_positions %}
+  <h3>Positions</h3>
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>Instrument</th><th class="num">Shares</th><th class="num">Avg cost</th>
+          <th class="num">Last</th><th class="num">Value</th>
+          <th class="num">Unrealised</th><th class="num">Weight</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for position in card.top_positions[:8] %}
+        {% set symbol = card.symbols.get(position.instrument_id, '?') %}
+        <tr>
+          <td><a href="/securities/{{ symbol }}?portfolio={{ card.portfolio.portfolio_id }}">{{ symbol }}</a></td>
+          <td class="num">{{ position.quantity|quantity }}</td>
+          <td class="num">{{ position.average_cost|money(card.portfolio.base_currency) }}</td>
+          <td class="num">{{ position.last_price|money(card.portfolio.base_currency) }}</td>
+          <td class="num">{{ position.market_value|money(card.portfolio.base_currency) }}</td>
+          <td class="num {% if position.unrealized_gain and position.unrealized_gain > 0 %}up{% elif position.unrealized_gain and position.unrealized_gain < 0 %}down{% endif %}">
+            {{ position.unrealized_gain|signed_money(card.portfolio.base_currency) }}
+          </td>
+          <td class="num">
+            {% if position.market_value is not none and card.state.positions_value %}
+            {{ bar(position.market_value / card.state.positions_value) }}
+            {% else %}{{ MISSING }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if card.top_positions|length > 8 %}
+  <p class="muted small">
+    <a href="/portfolios/{{ card.portfolio.portfolio_id }}">{{ card.top_positions|length - 8 }} more →</a>
+  </p>
+  {% endif %}
+  {% endif %}
+</section>
+{% endfor %}
+
+{% if overview and overview.truncated %}
+<p class="muted small">
+  {{ overview.truncated }} further portfolio(s) not shown —
+  <a href="/portfolios">see all</a>.
+</p>
+{% endif %}
+
+<section>
+  <h2>Rates <span class="small muted">· <a href="/markets">markets</a></span></h2>
+  {% if 'rates' in (overview.degraded|join(' ') if overview else '') %}
+  <p class="muted">Rates could not be read. This is not the same as there being no rates.</p>
+  {% elif overview and overview.rates %}
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead>
+        <tr><th>Tenor</th><th class="num">Yield</th><th class="num">1m</th><th class="num">1y</th><th>As of</th></tr>
+      </thead>
+      <tbody>
+        {% for line in overview.rates %}
+        <tr>
+          <td>{{ line.name }}</td>
+          <td class="num">{{ line.value|rate(line.unit) }}%</td>
+          <td class="num {% if line.change_1m and line.change_1m > 0 %}up{% elif line.change_1m and line.change_1m < 0 %}down{% endif %}">{{ line.change_1m|signed_rate(line.unit) }}</td>
+          <td class="num {% if line.change_1y and line.change_1y > 0 %}up{% elif line.change_1y and line.change_1y < 0 %}down{% endif %}">{{ line.change_1y|signed_rate(line.unit) }}</td>
+          <td class="muted">{{ line.observed_on }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">No rate history stored yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Coming up <span class="small muted">· next 14 days</span></h2>
+  {% if overview and overview.earnings %}
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead><tr><th>Date</th><th>Symbol</th><th class="num">Estimate</th><th>Session</th></tr></thead>
+      <tbody>
+        {% for event in overview.earnings %}
+        <tr>
+          <td>{{ event.reports_on }}</td>
+          <td>{{ event.symbol }}</td>
+          <td class="num">{{ event.eps_forecast|money }}</td>
+          {# An unconfirmed session is stated, never rendered as a time: a
+             calendar implying a known moment can be wrong by 16 hours. #}
+          <td class="muted">{{ event.time_of_day if event.is_confirmed else 'unconfirmed' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nothing scheduled for what you hold.</p>
+  {% endif %}
+</section>
+
+<section class="cards">
+  <article class="card">
+    <h2>Data health</h2>
+    <p class="value">
+      {% set bad = overview.provider_health|selectattr('state', 'ne', 'healthy')|list if overview else [] %}
+      {{ (overview.provider_health|length if overview else 0) - bad|length }}/{{ overview.provider_health|length if overview else 0 }}
+    </p>
+    <p class="muted">
+      providers healthy ·
+      {{ overview.open_findings|length if overview else 0 }} open finding(s) ·
+      <a href="/health">detail</a>
+    </p>
+  </article>
+  <article class="card">
+    <h2>Last job</h2>
+    {% set latest = overview.recent_runs[0] if overview and overview.recent_runs else None %}
+    <p class="value">{{ latest.status if latest else MISSING }}</p>
+    <p class="muted">
+      {% if latest %}{{ latest.job }} · {{ latest.started_at|ago }} · {% endif %}
+      <a href="/jobs">history</a>
+    </p>
+  </article>
+</section>
+
+<section>
+  <h2>What this does not claim</h2>
+  <p class="muted small">
+    The attention score orders this inbox by relevance to your positions. It
+    was measured against subsequent benchmark-relative returns over 88 events
+    and <strong>does not predict them</strong> — Spearman +0.04 at one day,
+    −0.40 at five. It is kept for ordering, not for forecasting, and the
+    severity bands sit above the range it actually produces. The workings are
+    in <code>docs/CALIBRATION.md</code>.
+  </p>
+</section>
+
+<section>
+  <h2>Recent activity</h2>
+  <ul class="activity" id="activity-list">
+    <li class="muted">Waiting for the first job to report…</li>
+  </ul>
+</section>
+{% endblock %}

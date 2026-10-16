@@ -1,0 +1,65 @@
+# EXAMPLE ONLY. Copy to .github/workflows/ in your own repository to enable it.
+# It is not active here, because it needs a repository secret
+# (AKM_DATABASE_URL, a postgresql+psycopg:// URL for a database you run) that
+# only you can provide. See DEPLOY.md.
+#
+# Deeper work that is not worth doing nightly.
+#
+# Sunday evening, so the results are waiting before the week opens.
+name: Weekly
+
+on:
+  schedule:
+    - cron: "0 20 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: weekly
+  cancel-in-progress: false
+
+jobs:
+  deep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --extra postgres
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            var/prices
+            var/fundamentals
+          key: akmarkets-weekly-${{ github.run_id }}
+          restore-keys: akmarkets-weekly-
+
+      - run: uv run ak-markets db check
+        env:
+          AKM_DATABASE_URL: ${{ secrets.AKM_DATABASE_URL }}
+
+      # A full refetch once a week catches corrections a provider made to a
+      # bar we already cached, which the freshness check cannot see: the
+      # cache holds that session, so it looks current.
+      - name: Full refresh
+        run: |
+          set +e
+          uv run ak-markets refresh --job weekly | tee weekly.log
+          code=${PIPESTATUS[0]}
+          [ "$code" -le 2 ] || exit "$code"
+        env:
+          AKM_DATABASE_URL: ${{ secrets.AKM_DATABASE_URL }}
+          AKM_ENV: production
+          AKM_SOURCE: github-actions-weekly
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### Weekly refresh"
+            echo '```'
+            cat weekly.log 2>/dev/null || echo "(no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

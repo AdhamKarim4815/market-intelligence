@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="lede">
+  <h1>Markets</h1>
+  <p class="muted">
+    US Treasury par yields and the earnings calendar, both from the issuer
+    and the exchange directly — no key, no account, no vendor in between.
+  </p>
+</section>
+
+<section>
+  <h2>Yield curve</h2>
+  {% if rates %}
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>Tenor</th><th class="num">Yield</th>
+          <th class="num">1m</th><th class="num">1y</th><th>As of</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in rates %}
+        <tr>
+          <td>{{ line.name }}</td>
+          <td class="num">{{ line.value|rate(line.unit) }}%</td>
+          <td class="num {% if line.change_1m and line.change_1m > 0 %}up{% elif line.change_1m and line.change_1m < 0 %}down{% endif %}">{{ line.change_1m|signed_rate(line.unit) }}</td>
+          <td class="num {% if line.change_1y and line.change_1y > 0 %}up{% elif line.change_1y and line.change_1y < 0 %}down{% endif %}">{{ line.change_1y|signed_rate(line.unit) }}</td>
+          <td class="muted">{{ line.observed_on }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">
+    A change is <code>None</code> — an em dash — when the stored history is
+    too short to support it. Answering "where are rates versus a year ago"
+    from three weeks of data is not a smaller version of the truth.
+  </p>
+  {% else %}
+  <p class="muted">
+    No rate history stored. Run <code>ak-markets refresh --stage macro</code>.
+  </p>
+  {% endif %}
+</section>
+
+{% if spreads %}
+<section>
+  <h2>Spreads</h2>
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead><tr><th>Pair</th><th class="num">Difference</th></tr></thead>
+      <tbody>
+        {% for long_name, short_name, value in spreads %}
+        <tr>
+          <td>{{ long_name }} − {{ short_name }}</td>
+          <td class="num {% if value > 0 %}up{% elif value < 0 %}down{% endif %}">{{ value|signed_rate }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">
+    A subtraction between two published yields, and nothing more. This page
+    deliberately does not label a curve shape, call a regime or score
+    anything — those would be figures with no methodology behind them.
+  </p>
+</section>
+{% endif %}
+
+<section>
+  <h2>Earnings calendar <span class="small muted">· next {{ days }} days</span></h2>
+  {% if earnings %}
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>Date</th><th>Symbol</th><th>Company</th>
+          <th class="num">Estimate</th><th class="num">Last year</th><th>Session</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in earnings %}
+        <tr>
+          <td>{{ event.reports_on }}</td>
+          <td>
+            {{ event.symbol }}
+            {% if event.symbol in universe %}<span class="state state-healthy">yours</span>{% endif %}
+          </td>
+          <td class="muted">{{ event.company }}</td>
+          <td class="num">{{ event.eps_forecast|money }}</td>
+          <td class="num">{{ event.last_year_eps|money }}</td>
+          {# Never rendered as a time when unconfirmed: a calendar that
+             implies a known moment can be wrong by sixteen hours. #}
+          <td class="muted">{{ event.time_of_day if event.is_confirmed else 'unconfirmed' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nothing scheduled in this window.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Sources</h2>
+  {% if health %}
+  <div class="grid-wrap">
+    <table class="grid">
+      <thead><tr><th>Category</th><th>Provider</th><th>State</th><th>Detail</th></tr></thead>
+      <tbody>
+        {% for row in health %}
+        <tr>
+          <td>{{ row.category }}</td>
+          <td>{{ row.provider }}</td>
+          <td><span class="state state-{{ row.state }}">{{ row.state }}</span></td>
+          <td class="muted">{{ row.message or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">These sources have not reported yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
