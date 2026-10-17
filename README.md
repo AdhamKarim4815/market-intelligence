@@ -8,6 +8,8 @@ be made with it.
 copies a trade, or acts on a conclusion it reaches. Execution is a separate
 system that this one neither depends on nor can reach.
 
+![Layered architecture of the platform: providers, db, domain, services, then CLI, web and API](docs/architecture.png)
+
 ## Disclaimer
 
 This project is for educational and research purposes only. It is not
